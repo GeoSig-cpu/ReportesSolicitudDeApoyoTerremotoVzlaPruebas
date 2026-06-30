@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoreo Solicitud de Apoyo</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <style>
+        /* Reset básico y mapa a pantalla completa */
+        html, body, #map {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+        }
+
+        /* Banner de Título Superior Flotante */
+        .map-header {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            z-index: 1000;
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+            border-left: 5px solid #d9534f;
+            backdrop-filter: blur(5px);
+        }
+
+        .map-header h1 {
+            margin: 0;
+            font-size: 18px;
+            color: #2c3e50;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .map-header p {
+            margin: 4px 0 0 0;
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .counter-badge {
+            display: inline-block;
+            background-color: #e67e22;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        /* NUEVO: Contenedor estético del Filtro de Fechas (Arriba a la derecha) */
+        .filter-container {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            z-index: 1000;
+            font-size: 12px;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 160px;
+        }
+        .filter-container label {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .filter-container input {
+            padding: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        .filter-container button {
+            background: #2980b9;
+            color: white;
+            border: none;
+            padding: 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .filter-container button:hover {
+            background: #2471a3;
+        }
+
+        /* Estilo personalizado para el Popup */
+        .popup-emergencia {
+            min-width: 220px;
+        }
+        .popup-emergencia h3 {
+            margin: 0 0 6px 0;
+            color: #d9534f;
+            font-size: 14px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 4px;
+        }
+        .popup-emergencia p {
+            margin: 6px 0;
+            font-size: 13px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        /* Ajuste estándar para Fotos y Videos dentro del Popup */
+        .popup-media {
+            width: 100%;
+            max-width: 350px;
+            height: 250px;
+            object-fit: cover;
+            margin-top: 6px;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            background-color: #000;
+        }
+
+        /* Leyenda de Emergencia mejorada */
+        .info.legend {
+            padding: 10px 14px;
+            font-size: 12px;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            border-radius: 6px;
+            color: #333;
+            border: none;
+        }
+        .info.legend h4 {
+            margin: 0 0 6px 0;
+            color: #2c3e50;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .legend-item {
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+        }
+        .legend-icon {
+            width: 12px;
+            height: 12px;
+            margin-right: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        /* Ajustes para pantallas pequeñas (Celulares) */
+        @media (max-width: 600px) {
+            .map-header {
+                top: 10px;
+                padding: 8px 15px;
+            }
+            .map-header h1 {
+                font-size: 14px;
+            }
+            .map-header p {
+                font-size: 10px;
+            }
+            .filter-container {
+                top: auto;
+                bottom: 150px;
+                left: 15px;
+                right: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="map-header">
+        <h1>Reportes Solicitud de Apoyo</h1>
+        <p>Georreferenciación de reportes multimedia y solicitud de Apoyo publicados por usuarios y periodistas en redes sociales las últimas 24 horas (Elaborado por Voluntarios)</p>
+        <div class="counter-badge" id="report-counter">Cargando reportes...</div>
+    </div>
+
+    <div class="filter-container">
+        <label>Desde:</label>
+        <input type="date" id="fecha-inicio">
+        <label>Hasta:</label>
+        <input type="date" id="fecha-fin">
+        <button onclick="aplicarFiltroFechas()">Filtrar</button>
+        <button onclick="limpiarFiltroFechas()" style="background:#7f8c8d;">Ver Todos</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        // 1. Inicializar el mapa centrado en el Estado La Guaira con zoom adaptado
+        const map = L.map('map', { zoomControl: false }).setView([10.5950, -66.9300], 9);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        // 2. Capa base
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // --- SOLUCIÓN PARA ICONOS INVISIBLES (Se mantiene por compatibilidad si usas marcadores estándar) ---
+        delete L.Icon.Default.prototype._getIconUrl;
+        L.Icon.Default.mergeOptions({
+            iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+            iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+            shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        });
+
+        // 3. Conexión con tu API segura en Vercel
+        const apiSecureUrl = 'https://reportes-solicitud-de-apoyo-terremo.vercel.app/api/alertas';       
+
+        // NUEVAS VARIABLES GLOBALES PARA FILTRADO
+        let todosLosRegistros = [];
+        let capaMarcadores = L.layerGroup().addTo(map);
+
+        // NUEVO: Diccionario para homologar colores según las opciones de Kobo
+        const coloresAyuda = {
+            "Maquinaria Pesada": "#e74c3c", // Rojo
+            "Insumos médicos": "#00bcd4",   // Celeste/Cian
+            "Alimentos": "#2ecc71",         // Verde
+            "Rescatistas": "#9b59b6",       // Morado
+            "Otro": "#f1c40f",              // Amarillo
+            "No especificado": "#7f8c8d"    // Gris
+        };
+
+        // --- FUNCIÓN ADICIONAL: PROCESAR ENLACES DE REDES SOCIALES ---
+        function obtenerUrlIncrustada(url) {
+            if (!url || typeof url !== 'string') return '';
+            let urlLimpia = url.trim();
+
+            if (urlLimpia.includes('instagram.com')) {
+                let parteBase = urlLimpia.split('?')[0];
+                if (!parteBase.endsWith('/')) parteBase += '/';
+                return `${parteBase}embed/`;
+            }
+            
+            if (urlLimpia.includes('tiktok.com') && urlLimpia.includes('/video/')) {
+                const match = urlLimpia.match(/\/video\/(\d+)/);
+                if (match && match[1]) {
+                    return `https://www.tiktok.com/embed/v2/${match[1]}`;
+                }
+            }
+            return urlLimpia;
+        }
+
+        async function fetchConTimeout(url, opciones, timeout = 25000) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+                const response = await fetch(url, { ...opciones, signal: controller.signal });
+                clearTimeout(id);
+                return response;
+            } catch (error) {
+                clearTimeout(id);
+                throw error;
+            }
+        }
+
+        async function cargarAlertas(reintentos = 3) {
+            try {
+                const response = await fetchConTimeout(apiSecureUrl, { method: 'GET' });
+
+                if (!response.ok) throw new Error(`Error de red: ${response.status}`);
+                
+                const data = await response.json(); 
+                todosLosRegistros = data.results || [];
+                
+                // Renderizar inicialmente todos los registros cargados
+                dibujarMarcadores(todosLosRegistros);
+
+            } catch (error) {
+                console.error('Error detectado:', error);
+                if (reintentos > 0) {
+                    document.getElementById('report-counter').innerText = `🔄 Redireccionando pasarela... (${reintentos})`;
+                    setTimeout(() => cargarAlertas(reintentos - 1), 3000);
+                } else {
+                    document.getElementById('report-counter').innerText = `⚠️ Error de comunicación segura`;
+                }
+            }
+        }
+
+        // NUEVA FUNCIÓN: Se encarga de limpiar, clasificar y plasmar los puntos en el mapa
+        function dibujarMarcadores(registros) {
+            capaMarcadores.clearLayers(); // Limpia el mapa de remanentes viejos
+            
+            document.getElementById('report-counter').innerText = `📊 ${registros.length} Reportes`;
+
+            registros.forEach(registro => {
+                if (registro._geolocation && registro._geolocation.length >= 2) {
+                    const lat = parseFloat(registro._geolocation[0]);
+                    const lng = parseFloat(registro._geolocation[1]);
+                    if (isNaN(lat) || isNaN(lng)) return;
+
+                    const descripcion = registro['descripcion_emergencia'] || 'Sin descripción disponible.';
+                    const fecha = registro['fecha_de_alerta'] || 'Reciente';
+                    const fuente = registro['Fuente_de_la_informaci_n'] || 'Usuario de Redes Sociales';
+                    const linkRedSocial = registro['video_embed_url'] || ''; 
+                    const urlEmbebida = obtenerUrlIncrustada(linkRedSocial);
+                    const masInformacion = registro['M_s_informaci_n'] || '';
+                    
+                    // NUEVO: Capturar el nuevo campo de KoboToolbox
+                    const tipoAyuda = registro['tipo_ayuda'] || 'No especificado';
+                    
+                    let fotoUrl = '';
+                    let videoUrl = '';
+
+                    if (registro._attachments && registro._attachments.length > 0) {
+                        const adjuntoFoto = registro._attachments.find(att => att.question_xpath === 'evidencia_foto');
+                        if (adjuntoFoto) fotoUrl = adjuntoFoto.download_medium_url || adjuntoFoto.download_url || '';
+
+                        const adjuntoVideo = registro._attachments.find(att => att.question_xpath === 'evidencia_video');
+                        if (adjuntoVideo) videoUrl = adjuntoVideo.download_url || '';
+                    }
+
+                    // Construcción base del Popup (Inyectando etiqueta visual de color para el tipo de ayuda)
+                    let popupContent = `
+                        <div class="popup-emergencia">
+                            <h3>📍 Reporte de Campo</h3>
+                            <p><strong>Tipo de Ayuda:</strong> <span style="background: ${coloresAyuda[tipoAyuda] || '#7f8c8d'}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold;">${tipoAyuda}</span></p>
+                            <p><strong>Descripción:</strong> ${descripcion}</p>
+                            <p><strong>Verificación / Fuente:</strong> <span style="color: #2980b9; font-weight: bold;">${fuente}</span></p>
+                    `;
+
+                    if (masInformacion.trim() !== '') {
+                        const urlValida = masInformacion.startsWith('http') ? masInformacion : `https://${masInformacion}`;
+                        popupContent += `
+                            <p><strong>Más información:</strong> 
+                                <a href="${urlValida}" target="_blank" style="color: #e67e22; font-weight: bold; text-decoration: underline;">
+                                    Ver enlace externo 🔗
+                                </a>
+                            </p>
+                        `;
+                    }
+                    
+                    if (fotoUrl) {
+                        popupContent += `
+                            <p><strong>Captura de Origen:</strong><br>
+                                <img src="${fotoUrl}" class="popup-media" alt="Evidencia" onerror="this.style.display='none';">
+                            </p>
+                        `;
+                    }
+
+                    if (urlEmbebida !== '') {
+                        const esLinkCortoTikTok = linkRedSocial.includes('tiktok.com') && !urlEmbebida.includes('/embed/');
+                        popupContent += `
+                            <div style="margin-top: 8px;">
+                                <p><strong>Video de Red Social:</strong></p>
+                                <div style="position: relative; width: 100%; max-width: 350px; height: 340px; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.2); background-color: #000;">
+                        `;
+
+                        if (esLinkCortoTikTok) {
+                            popupContent += `
+                                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px; text-align: center; color: white;">
+                                        <span style="font-size: 24px; margin-bottom: 10px;">📱</span>
+                                        <p style="font-size: 11px; margin-bottom: 15px; line-height:1.3;">Video de TikTok copiado desde celular (enlace corto).</p>
+                                        <a href="${linkRedSocial}" target="_blank" style="background-color: #fe2c55; color: white; text-decoration: none; padding: 8px 12px; border-radius: 4px; font-weight: bold; font-size: 11px;">
+                                            Ver video en TikTok ↗
+                                        </a>
+                                    </div>
+                            `;
+                        } else {
+                            popupContent += `
+                                    <iframe src="${urlEmbebida}" width="100%" height="100%" frameborder="0" scrolling="no" allowtransparency="true" allow="encrypted-media;"></iframe>
+                            `;
+                        }
+
+                        popupContent += `</div></div>`;
+                    }
+
+                    if (videoUrl) {
+                        popupContent += `
+                            <div style="margin-top: 8px;">
+                                <p><strong>Video de Redes:</strong></p>
+                                <div style="position: relative; background: #000; border-radius: 6px; width: 100%; max-width: 350px; height: 200px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
+                                    <video class="popup-media" controls preload="none" playsinline style="width: 100%; height: 100%; object-fit: cover;" onclick="if(!this.src){ this.src='${videoUrl}'; this.load(); } this.play();">
+                                        Tu navegador no soporta streaming.
+                                    </video>
+                                    <div class="play-overlay" style="position: absolute; color: white; pointer-events: none; font-size: 12px; background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 4px; text-align: center;">
+                                        ▶️ Hacer clic para cargar e iniciar video
+                                    </div>
+                                </div>
+                                <a href="${videoUrl}" target="_blank" style="font-size: 11px; color: #2980b9; text-decoration: underline; display: block; margin-top: 6px; font-weight: 600;">
+                                    📥 Descargar video
+                                </a>
+                            </div>
+                        `;
+                    }
+
+                    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+                    const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+
+                    popupContent += `
+                        <div style="margin-top: 12px; display: flex; gap: 8px;">
+                            <a href="${googleMapsUrl}" target="_blank" style="flex: 1; text-align: center; background-color: #34a853; color: white; text-decoration: none; padding: 8px; border-radius: 4px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🚗 Google Maps</a>
+                            <a href="${wazeUrl}" target="_blank" style="flex: 1; text-align: center; background-color: #29b6f6; color: white; text-decoration: none; padding: 8px; border-radius: 4px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🔷 Waze</a>
+                        </div>
+                        <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
+                        <p style="margin: 0; font-size: 11px; color: #777; text-align: right;">📅 Registro: ${fecha}</p>
+                    </div>
+                    `;
+
+                    // NUEVO: Marcador de círculo dinámico según la paleta de colores
+                    const colorAsignado = coloresAyuda[tipoAyuda] || coloresAyuda["No especificado"];
+                    
+                    const marker = L.circleMarker([lat, lng], {
+                        radius: 9,
+                        fillColor: colorAsignado,
+                        color: "#ffffff",
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.9
+                    }).bindPopup(popupContent);
+
+                    marker.on('popupopen', function() {
+                        const videoEl = document.querySelector('.leaflet-popup-content video');
+                        const overlayEl = document.querySelector('.leaflet-popup-content .play-overlay');
+                        if (videoEl && overlayEl) {
+                            videoEl.addEventListener('play', () => { overlayEl.style.display = 'none'; });
+                        }
+                    });
+
+                    capaMarcadores.addLayer(marker);
+                }
+            });
+        }
+
+        // NUEVA FUNCIÓN: Lógica del filtro de fechas (Compara timestamps)
+        function aplicarFiltroFechas() {
+            const inicioInput = document.getElementById('fecha-inicio').value;
+            const finInput = document.getElementById('fecha-fin').value;
+
+            if (!inicioInput || !finInput) {
+                alert("Por favor, selecciona ambas fechas.");
+                return;
+            }
+
+            // Normalizar a horas extremas para abarcar el día completo de cada fecha
+            const tInicio = new Date(inicioInput + "T00:00:00").getTime();
+            const tFin = new Date(finInput + "T23:59:59").getTime();
+
+            const registrosFiltrados = todosLosRegistros.filter(registro => {
+                const fechaAlerta = registro['fecha_de_alerta'];
+                if (!fechaAlerta) return false;
+                
+                const fechaRegistro = new Date(fechaAlerta).getTime();
+                return fechaRegistro >= tInicio && fechaRegistro <= tFin;
+            });
+
+            dibujarMarcadores(registrosFiltrados);
+        }
+
+        // NUEVA FUNCIÓN: Limpiar filtros de entrada y restaurar la visualización global
+        function limpiarFiltroFechas() {
+            document.getElementById('fecha-inicio').value = "";
+            document.getElementById('fecha-fin').value = "";
+            dibujarMarcadores(todosLosRegistros);
+        }
+
+        // LEYENDA DINÁMICA REMODELADA (Abajo a la izquierda)
+        const legend = L.control({position: 'bottomleft'});
+        legend.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'info legend');
+            div.innerHTML = `<h4>Solicitudes de Apoyo</h4>`;
+            
+            // Ciclo iterativo sobre el mapa de colores para armar la interfaz automáticamente
+            for (const [clave, color] of Object.entries(coloresAyuda)) {
+                div.innerHTML += `
+                    <div class="legend-item">
+                        <span class="legend-icon" style="background: ${color}; border: 1.5px solid white; box-shadow: 0 0 2px rgba(0,0,0,0.3);"></span>
+                        ${clave}
+                    </div>
+                `;
+            }
+            return div;
+        };
+        legend.addTo(map);
+
+        // Ejecutar
+        cargarAlertas();
+    </script>
+</body>
+</html>
